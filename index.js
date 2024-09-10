@@ -18,7 +18,7 @@ app.use(express.json()); // express 묘듈의 json() 메소드를 사용. (expre
 
 // req,res로 줄여도 됨
 app.get('/', (request, response) => {
-  response.send('Hello World! not completed');
+  response.send('Hello World! completed');
 });
 
 // app.get('/get_tasks', async (req, res) => {
