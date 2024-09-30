@@ -30,7 +30,7 @@ class UTF8TextLoader(TextLoader):
         super().__init__(file_path, encoding="utf-8")
 
 # 기본적으로 Python은 Windows에서 cp949 인코딩을 사용하지만, 한글 텍스트 파일이 UTF-8로 인코딩 된 경우 이 문제가 발생할 수 있다.
-loader = DirectoryLoader("./data", glob="*.txt", loader_cls=UTF8TextLoader) # 경로, 타입, 사용 함수
+loader = DirectoryLoader("./data", glob="*.pdf", loader_cls=UTF8TextLoader) # 경로, 타입, 사용 함수
 documents = loader.load()
 # print(len(documents))
 
