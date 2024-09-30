@@ -1,25 +1,16 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
-
-
 name: Node.js CI
-
 
 on:
   push:
     branches: ['main']
 
-
 jobs:
   build:
     runs-on: self-hosted
 
-
     strategy:
       matrix:
         node-version: [18.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
 
     steps:
       - uses: actions/checkout@v4
@@ -28,12 +19,13 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
+          
       - run: npm ci
+      
       - run: |
           touch .env
           echo "${{ secrets.PROD_ENV_FILE }}" > .env
           echo "${{ secrets.OPENAI_API_KEY }}" >> .env
-
 
       # Set up Python environment
       - name: Set up Python 3.12.6
@@ -41,13 +33,11 @@ jobs:
         with:
           python-version: '3.12.6'
 
-
       # Create and activate Python virtual environment
       - name: Set up Python virtual environment
         run: |
           python -m venv venv
           source venv/bin/activate
-
 
       # Install Python dependencies (if you have a requirements.txt file)
       - name: Install Python dependencies
@@ -55,8 +45,10 @@ jobs:
           source venv/bin/activate
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      # Run Python script (추가: Python 스크립트 실행)
+      - name: Run Python script
+        run: |
+          source venv/bin/activate
+          python chat/bizchat.py "테스트 질문"
 
       - run: pm2 restart BackendAPI
-
-
-

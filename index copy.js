@@ -1,108 +1,65 @@
-const express = require("express");
-const { spawn } = require("child_process");
-const path = require("path");
+const express = require('express'); // express 모듈 불러오기
+const cors = require('cors'); // cors 모듈 불러오기
+const { spawn } = require('child_process');
+const path = require('path');
 
-console.log(path.join(__dirname));
+const PORT = 8080;
+const app = express(); // express 모듈을 사용하기 위해 app 변수에 할당
 
-const app = express();
-const PORT = 8000;
+app.use(cors()); // HTTP, HTTPS 프로토콜을 사용하는 서버 간의 통신을 허용
+app.use(express.json()); // express 모듈의 json() 메소드를 사용 (json으로 파싱)
 
-// 최신 Express는 body-parser 내장
-app.use(express.json());
+// 기본 라우트: "Hello World!" 응답
+app.get('/', (req, res) => {
+  res.send('Hello World! completed wow');
+});
 
+// /chat POST 요청 처리
 app.post('/chat', (req, res) => {
-  
-    const sendQuestion = req.body.question;
+  try {
+    const sendQuestion = req.body.question; // 요청으로 받은 question 데이터
 
-    // Python 경로 및 스크립트 경로 설정
-    const execPython = path.join(__dirname, "chat", "bizchat.py");
-    const pythonPath = path.join(__dirname, "chat", "Scripts", "python.exe");
-    
-    const net = spawn(pythonPath, [execPython, sendQuestion]);
+    // Python 스크립트 경로와 Python 실행 경로 설정
+    const scriptPath = path.join(__dirname, 'chat', 'bizchat.py'); // 실행할 Python 스크립트 경로
+    const pythonPath = path.join(__dirname, 'chat', 'Scripts', 'python.exe'); // Python 실행 경로 (Windows 환경)
 
-    let output = "";  // 변경 가능한 변수로 선언
+    // Python 스크립트를 실행하며, 사용자가 보낸 질문을 인자로 전달
+    const pythonProcess = spawn(pythonPath, [scriptPath, sendQuestion]);
 
-    // Python 스크립트로부터 데이터를 수신
-    net.stdout.on('data', function (data) {
-        console.log(`Python output: ${data}`);
-        output += data.toString();  // 출력 결과 누적
+    let output = ''; // Python 스크립트의 출력을 저장할 변수
+
+    // Python 스크립트에서 stdout으로 데이터를 받을 때마다 실행
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString(); // Python 출력 데이터를 누적
     });
 
-    // Python 스크립트 종료 시 응답 처리
-    net.on('close', function (code) {
-        if (code === 0) {
-            console.log(`Python script finished with code ${code}`);
-            res.status(200).json({ answer: output });  // 누적된 결과를 반환
-        } else {
-            res.status(500).send('Something went wrong');
-        }
+    // Python 스크립트가 종료될 때 처리
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        res.status(200).json({ answer: output }); // 성공 시 누적된 출력을 반환
+      } else {
+        res.status(500).json({ error: `Python script exited with code ${code}` }); // 에러 시 코드 반환
+      }
     });
 
-    // 에러 처리
-    net.stderr.on('data', (data) => {
-        console.error(`stderr: ${data}`);
-        res.status(500).send(`Error occurred: ${data}`);
+    // Python 스크립트에서 에러 발생 시 처리
+    pythonProcess.stderr.on('data', (data) => {
+      console.error(`stderr: ${data}`);
+      res.status(500).json({ error: data.toString() }); // 에러 발생 시 클라이언트에 에러 반환
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message }); // 예외 처리
+  }
 });
 
+// 추가 라우터 파일 연결 (CRUD 작업 등을 위한 라우터)
+app.use(require('./routes/getRoutes'));
+app.use(require('./routes/postRoutes'));
+app.use(require('./routes/deleteRoutes'));
+app.use(require('./routes/updateRoutes'));
+
+// 서버 시작
 app.listen(PORT, () => {
-    console.log(`Server is running on PORT ${PORT}`);
+  console.log(`Server is running on PORT ${PORT}`);
 });
 
-
-// app.post('/chat', (req, res) => {
-//   try {
-//     // console.log(req.body);
-//     // Extract the question from the request body (assuming it's sent as JSON)
-//     const sendedQuestion = req.body.question;
-//     // console.log(sendedQuestion);
-
-
-//     // EC2 서버에서 현재 실행 중인 Node.js 파일의 절대 경로를 기준으로 설정합니다.
-//     const scriptPath = path.join(__dirname, 'bizchat.py');
-//     const pythonPath = path.join(__dirname, 'venv', 'bin', 'python3');
-
-
-//     // Spawn the Python process with the correct argument
-//     const result = spawn(pythonPath, [scriptPath, sendedQuestion]);
-
-
-//     // result.stdout.on('data', (data) => {
-//     //   console.log(data.toString());
-//     //   // return res.status(200).json(data.toString());
-//     // });
-
-
-//     let responseData = '';
-
-
-//     // Listen for data from the Python script
-//     result.stdout.on('data', (data) => {
-//       // console.log(data.toString());
-//       // res.status(200).json({ answer: data.toString() });
-//       responseData += data.toString();
-//     });
-
-
-//     // Listen for errors from the Python script
-//     result.stderr.on('data', (data) => {
-//       console.error(`stderr: ${data}`);
-   
-//    res.status(500).json({ error: data.toString() });
-//     });
-
-
-//     // Handle the close event of the child process
-//     result.on('close', (code) => {
-//       if (code === 0) {
-//         res.status(200).json({ answer: responseData });
-//       } else {
-//         res
-//           .status(500)
-//           .json({ error: `Child process exited with code ${code}` });
-//       }
-//     });
-//   } catch (error) {
-//     return res.status(500).json({ error: error.message });
-//   }
-// });
