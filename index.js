@@ -5,14 +5,6 @@ const PORT = '8080';
 
 const app = express(); // express 묘듈을 사용하기 위해 app 변수에 할당한다.
 
-// const corsOptions = {
-//   origin: 'http://localhost:3000', // 허용할 주소
-//   credentials: true, // 인증 정보 허용
-// };
-
-// const corsOption2 = ['http://localhost:3000', 'http://localhost:3001'];
-// app.use(cors(corsOption2)); <= 위처럼 지정할경우 이렇게 넣어서 사용함
-
 app.use(cors()); //http, https 프로토콜을 사용하는 서버 간의 통신을 허용한다. (100%는 아님)
 app.use(express.json()); // express 묘듈의 json() 메소드를 사용. (express를 json으로 파싱)
 
