@@ -6,33 +6,56 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_community.document_loaders import TextLoader
-from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from collections import Counter
 # from langchain.schema import Document  # Document 클래스 임포트
 from langchain_community.vectorstores import FAISS
-
 from dotenv import load_dotenv
+
 load_dotenv()
 os.getenv("OPENAI_API_KEY")
 
 # 경로 추적을 위한 설정
 os.environ["PWD"] = os.getcwd()
 
-# 출력의 인코딩을 utf-8로 설정한다.
+# 출력 인코딩을 UTF-8로 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
 
+# UTF-8로 인코딩된 텍스트 로더 클래스 정의
 class UTF8TextLoader(TextLoader):
     def __init__(self, file_path: str):
         super().__init__(file_path, encoding="utf-8")
 
-# 기본적으로 Python은 Windows에서 cp949 인코딩을 사용하지만, 한글 텍스트 파일이 UTF-8로 인코딩 된 경우 이 문제가 발생할 수 있다.
-loader = DirectoryLoader("./data", glob="*.pdf", loader_cls=UTF8TextLoader) # 경로, 타입, 사용 함수
+# 다양한 파일 형식 로더를 적용할 수 있도록 CustomDirectoryLoader 정의
+class CustomDirectoryLoader:
+    def __init__(self, directory):
+        self.directory = directory
+        self.loader_map = {
+            ".pdf": PyPDFLoader,
+            ".txt": UTF8TextLoader,  # 텍스트 파일 처리
+        }
+
+    def load(self):
+        documents = []
+        for filename in os.listdir(self.directory):
+            filepath = os.path.join(self.directory, filename)
+            ext = os.path.splitext(filename)[1].lower()  # 파일 확장자 추출
+
+            if ext in self.loader_map:
+                loader_cls = self.loader_map[ext]
+                loader = loader_cls(filepath)
+                documents.extend(loader.load())  # 로드된 문서를 추가
+            else:
+                print(f"Unsupported file format: {filename}")
+        
+        return documents
+
+# ./data 폴더에서 PDF 및 TXT 파일 로드
+loader = CustomDirectoryLoader("./data")
 documents = loader.load()
-# print(len(documents))
 
 
 
