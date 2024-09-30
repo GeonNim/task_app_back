@@ -49,7 +49,8 @@ class CustomDirectoryLoader:
                 loader = loader_cls(filepath)
                 documents.extend(loader.load())  # 로드된 문서를 추가
             else:
-                print(f"Unsupported file format: {filename}")
+                # print(f"Unsupported file format: {filename}")
+                pass
         
         return documents
 
