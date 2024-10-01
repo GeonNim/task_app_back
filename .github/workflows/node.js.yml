@@ -1,25 +1,20 @@
 # This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
-
 name: Node.js CI
-
 
 on:
   push:
     branches: ['main']
 
-
 jobs:
   build:
     runs-on: self-hosted
-
 
     strategy:
       matrix:
         node-version: [18.x]
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
 
     steps:
       - uses: actions/checkout@v4
@@ -34,13 +29,11 @@ jobs:
           echo "${{ secrets.PRO_ENV_FILE }}" > .env
           echo "${{ secrets.OPENAI_API_KEY }}" >> .env
 
-
       # Set up Python environment
       - name: Set up Python 3.12.6
         uses: actions/setup-python@v4
         with:
           python-version: '3.12.6'
-
 
       # Create and activate Python virtual environment
       - name: Set up Python virtual environment
@@ -48,12 +41,28 @@ jobs:
           python -m venv venv
           source venv/bin/activate
 
-
       # Install Python dependencies (if you have a requirements.txt file)
       - name: Install Python dependencies
         run: |
           source venv/bin/activate
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-
       - run: pm2 restart BackendAPI
+
+      # Nginx 관련 설정 추가
+      - name: Install Nginx if not installed
+        run: |
+          if ! nginx -v 2>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y nginx
+          fi
+
+      - name: Check Nginx service status
+        run: sudo systemctl status nginx
+
+      - name: Restart Nginx service if not running
+        run: |
+          sudo systemctl is-active --quiet nginx || sudo systemctl start nginx
+
+      - name: Tail Nginx error log
+        run: sudo tail -n 50 /var/log/nginx/error.log
