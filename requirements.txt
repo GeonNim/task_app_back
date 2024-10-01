@@ -8,3 +8,4 @@ python-dotenv>=1.0.1
 tiktoken>=0.7.0
 langchain-teddynote>=0.0.34
 pypdf>=3.0.0
+pypdfium2>=4.30.0

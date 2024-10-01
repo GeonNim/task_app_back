@@ -1,18 +1,17 @@
-import os # 파일 경로 설정 등에 사용
-import sys # 한글 출력 인코딩에 사용
-import io # 한글 출력 인코딩에 사용
+import os  # 파일 경로 설정 등에 사용
+import sys  # 한글 출력 인코딩에 사용
+import io  # 한글 출력 인코딩에 사용
 from langchain import hub
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from collections import Counter
-# from langchain.schema import Document  # Document 클래스 임포트
-from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
+import pdfplumber
 
 load_dotenv()
 os.getenv("OPENAI_API_KEY")
@@ -29,12 +28,26 @@ class UTF8TextLoader(TextLoader):
     def __init__(self, file_path: str):
         super().__init__(file_path, encoding="utf-8")
 
+# PDF 파일을 빠르게 로드하는 FastPDFLoader 클래스 정의
+class FastPDFLoader:
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+
+    def load(self):
+        documents = []
+        with pdfplumber.open(self.file_path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    documents.append(text)
+        return documents
+
 # 다양한 파일 형식 로더를 적용할 수 있도록 CustomDirectoryLoader 정의
 class CustomDirectoryLoader:
     def __init__(self, directory):
         self.directory = directory
         self.loader_map = {
-            ".pdf": PyPDFLoader,
+            ".pdf": FastPDFLoader,  # FastPDFLoader로 PDF 파일 처리
             ".txt": UTF8TextLoader,  # 텍스트 파일 처리
         }
 
@@ -58,31 +71,18 @@ class CustomDirectoryLoader:
 loader = CustomDirectoryLoader("./data")
 documents = loader.load()
 
-
-
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200) # 분할 토큰수(chunk, 오버랩 정도)
+# 텍스트 분할 설정
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # 분할 토큰수(chunk, 오버랩 정도)
 texts = text_splitter.split_documents(documents)
-# print(f"분할된 텍스트 뭉치의 갯수: {len(texts)}")
 
-# OpenAIEmbeddings 클래스를 사용하여 백터스토어 생성
+# OpenAIEmbeddings 클래스를 사용하여 벡터스토어 생성
 embedding = OpenAIEmbeddings()
+
 # 벡터스토어를 생성합니다.
 vectorstore = FAISS.from_documents(documents=texts, embedding=embedding)
 retriever = vectorstore.as_retriever()
-# print(texts[0])
 
-# query = "신혼부부를 위한 정책을 알려주세요."
-# docs = retriever.invoke(query)  # 변경된 메서드 사용
-# print("유사도가 높은 텍스트 개수: ", len(docs))
-# print("--" * 20)
-# print("유사도가 높은 텍스트 중 첫 번째 텍스트 출력: ", docs[0])
-# print("--" * 20)
-# print("유사도가 높은 텍스트들의 문서 출처: ")
-# for doc in docs:
-#   print(doc.metadata["source"])
-#   pass
-
-# OpenAPI를 사용하여 대화 모델 생성 사전 주문
+# OpenAI를 사용하여 대화 모델 생성
 from langchain_core.prompts import PromptTemplate
 
 prompt = PromptTemplate.from_template(
@@ -99,11 +99,9 @@ prompt = PromptTemplate.from_template(
 #Answer:"""
 )
 
-llm=ChatOpenAI(model_name="gpt-4o", temperature=0)
+llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
 
 # 체인을 생성합니다.
-# RunnablePassthrough() : 데이터를 그래도 전달하는 역할. invoke() 메서드를 통해 입력된 데이터를 그대로 반환
-# StrOutputParser() : LLM이나 chatModel에서 나오는 언어 몸델의 출력을 문자열 형식으로 변환
 rag_chain = (
     {"context": retriever, "question": RunnablePassthrough()}
     | prompt
@@ -113,13 +111,12 @@ rag_chain = (
 
 from langchain_teddynote.messages import stream_response
 
-recieved_question = sys.argv[1];
-# print("질문: ", recieved_question)
+# 질문을 받습니다.
+recieved_question = sys.argv[1]
 
+# 답변 생성
 answer = rag_chain.stream(recieved_question)
 stream_response(answer)
-
-# print(answer)
 
 docs = loader.load()
 # print(f"문서의 수: {len(docs)}")
