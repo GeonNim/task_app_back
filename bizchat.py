@@ -1,17 +1,14 @@
 import os  # 파일 경로 설정 등에 사용
 import sys  # 한글 출력 인코딩에 사용
 import io  # 한글 출력 인코딩에 사용
-from langchain import hub
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
-from collections import Counter
 from dotenv import load_dotenv
-import pdfplumber
+import PyPDF2  # PyPDF2로 교체
 
 load_dotenv()
 os.getenv("OPENAI_API_KEY")
@@ -24,22 +21,31 @@ sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
 
 # UTF-8로 인코딩된 텍스트 로더 클래스 정의
-class UTF8TextLoader(TextLoader):
+class UTF8TextLoader:
     def __init__(self, file_path: str):
-        super().__init__(file_path, encoding="utf-8")
+        self.file_path = file_path
 
-# PDF 파일을 빠르게 로드하는 FastPDFLoader 클래스 정의
-class FastPDFLoader:
+    def load(self):
+        with open(self.file_path, encoding="utf-8") as f:
+            return [f.read()]
+
+# PDF 파일을 처리하는 PyPDFLoader 클래스 정의
+class FastPyPDFLoader:
     def __init__(self, file_path: str):
         self.file_path = file_path
 
     def load(self):
         documents = []
-        with pdfplumber.open(self.file_path) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    documents.append(text)
+        try:
+            with open(self.file_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                for page_num in range(len(reader.pages)):
+                    page = reader.pages[page_num]
+                    text = page.extract_text()
+                    if text:
+                        documents.append(text)
+        except Exception as e:
+            print(f"Error loading {self.file_path}: {e}")
         return documents
 
 # 다양한 파일 형식 로더를 적용할 수 있도록 CustomDirectoryLoader 정의
@@ -47,7 +53,7 @@ class CustomDirectoryLoader:
     def __init__(self, directory):
         self.directory = directory
         self.loader_map = {
-            ".pdf": FastPDFLoader,  # FastPDFLoader로 PDF 파일 처리
+            ".pdf": FastPyPDFLoader,  # PyPDF2로 PDF 파일 처리
             ".txt": UTF8TextLoader,  # 텍스트 파일 처리
         }
 
@@ -62,8 +68,7 @@ class CustomDirectoryLoader:
                 loader = loader_cls(filepath)
                 documents.extend(loader.load())  # 로드된 문서를 추가
             else:
-                # print(f"Unsupported file format: {filename}")
-                pass
+                pass  # 지원되지 않는 형식은 건너뜁니다
         
         return documents
 
@@ -81,12 +86,6 @@ embedding = OpenAIEmbeddings()
 # 벡터스토어를 생성합니다.
 vectorstore = FAISS.from_documents(documents=texts, embedding=embedding)
 retriever = vectorstore.as_retriever()
-
-# 벡터스토어를 디스크에 저장
-vectorstore.save_local("vectorstore_data")
-
-# 나중에 벡터스토어를 로드
-vectorstore = FAISS.load_local("vectorstore_data", embedding)
 
 # OpenAI를 사용하여 대화 모델 생성
 from langchain_core.prompts import PromptTemplate
@@ -123,6 +122,7 @@ recieved_question = sys.argv[1]
 # 답변 생성
 answer = rag_chain.stream(recieved_question)
 stream_response(answer)
+
 
 docs = loader.load()
 # print(f"문서의 수: {len(docs)}")
