@@ -1,9 +1,6 @@
-import os
-import sys
-import io
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
+import os # 파일 경로 설정 등에 사용
+import sys # 한글 출력 인코딩에 사용
+import io # 한글 출력 인코딩에 사용
 from langchain import hub
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
@@ -12,14 +9,13 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
+from collections import Counter
+# from langchain.schema import Document  # Document 클래스 임포트
+from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
-from io import BytesIO
 
-# Load environment variables
 load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    raise ValueError("OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인하세요.")
+os.getenv("OPENAI_API_KEY")
 
 # 경로 추적을 위한 설정
 os.environ["PWD"] = os.getcwd()
@@ -33,75 +29,13 @@ class UTF8TextLoader(TextLoader):
     def __init__(self, file_path: str):
         super().__init__(file_path, encoding="utf-8")
 
-# PDF 로더에서 필요한 페이지만 로드하는 클래스 정의
-class CustomPyPDFLoader(PyPDFLoader):
-    def __init__(self, file_path: str, pages=None):
-        super().__init__(file_path)
-        self.pages = pages
-
-    def load(self):
-        # 특정 페이지 추출 처리 (None이면 전체 페이지)
-        return super().load(pages=self.pages)
-
-# URL로부터 파일을 다운로드하여 텍스트로 처리하는 함수 추가
-class EnhancedURLLoader:
-    def __init__(self, url):
-        self.url = url
-
-    def load(self):
-        response = requests.get(self.url)
-        if response.status_code == 200:
-            # PDF 파일 처리
-            if self.url.endswith(".pdf"):
-                return PyPDFLoader(BytesIO(response.content)).load()
-            # 텍스트 파일 처리
-            elif self.url.endswith(".txt"):
-                return [response.text]
-            # 일반 웹 페이지 처리 (HTML)
-            else:
-                soup = BeautifulSoup(response.content, "html.parser")
-                # 스크립트와 스타일 제거
-                for script in soup(["script", "style"]):
-                    script.decompose()
-
-                # 페이지에서 텍스트만 추출
-                title = soup.find('title').get_text() if soup.find('title') else ""
-                body = soup.find('body').get_text(separator="\n") if soup.find('body') else ""
-                text = title + "\n" + body
-                return [text]
-        else:
-            print(f"Failed to fetch data from {self.url}")
-            return []
-
-# CSV 파일 로더 추가 (필터링 기능 포함)
-class FilteredCSVLoader(CSVLoader):
-    def load(self):
-        try:
-            # pandas를 사용하여 CSV 파일을 읽음
-            df = pd.read_csv(self.file_path)
-
-            # 필요하지 않은 열 제거 또는 특정 열만 선택
-            columns_to_use = ["column1", "column2"]  # 사용할 열 지정
-            df = df[columns_to_use]
-
-            # 특정 조건에 맞는 행만 필터링 (예: 특정 값 이상)
-            df = df[df['column1'] > 100]
-
-            # 모든 데이터를 텍스트로 변환
-            text_data = df.to_string(index=False)
-            return [text_data]
-        except Exception as e:
-            print(f"Error loading CSV file: {e}")
-            return []
-
 # 다양한 파일 형식 로더를 적용할 수 있도록 CustomDirectoryLoader 정의
 class CustomDirectoryLoader:
     def __init__(self, directory):
         self.directory = directory
         self.loader_map = {
-            ".pdf": CustomPyPDFLoader,
+            ".pdf": PyPDFLoader,
             ".txt": UTF8TextLoader,  # 텍스트 파일 처리
-            ".csv": FilteredCSVLoader,  # CSV 파일 처리 추가
         }
 
     def load(self):
@@ -115,40 +49,40 @@ class CustomDirectoryLoader:
                 loader = loader_cls(filepath)
                 documents.extend(loader.load())  # 로드된 문서를 추가
             else:
-                print(f"Unsupported file type: {ext} for file: {filename}")
+                # print(f"Unsupported file format: {filename}")
+                pass
         
         return documents
 
-# 사용자로부터 질문을 입력받음
-recieved_question = input("질문을 입력하세요: ")
-
-# 로컬 디렉토리의 데이터를 로드
+# ./data 폴더에서 PDF 및 TXT 파일 로드
 loader = CustomDirectoryLoader("./data")
 documents = loader.load()
 
-# URL에서 데이터를 추가로 로드
-url = input("참조할 URL을 입력하세요: ")
-if url:
-    url_loader = EnhancedURLLoader(url)
-    documents.extend(url_loader.load())
 
-# 텍스트 분할 설정
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200) # 분할 토큰수(chunk, 오버랩 정도)
 texts = text_splitter.split_documents(documents)
+# print(f"분할된 텍스트 뭉치의 갯수: {len(texts)}")
 
-# OpenAIEmbeddings 클래스를 사용하여 벡터스토어 생성
-embedding = OpenAIEmbeddings(openai_api_key=openai_api_key)
-
-# FAISS 인덱스가 이미 존재하는지 확인하고 로드 또는 생성
-if os.path.exists("faiss_index"):
-    vectorstore = FAISS.load_local("faiss_index", embedding)
-else:
-    vectorstore = FAISS.from_documents(documents=texts, embedding=embedding)
-    vectorstore.save_local("faiss_index")
-
+# OpenAIEmbeddings 클래스를 사용하여 백터스토어 생성
+embedding = OpenAIEmbeddings()
+# 벡터스토어를 생성합니다.
+vectorstore = FAISS.from_documents(documents=texts, embedding=embedding)
 retriever = vectorstore.as_retriever()
+# print(texts[0])
 
-# 프롬프트 템플릿 생성
+# query = "신혼부부를 위한 정책을 알려주세요."
+# docs = retriever.invoke(query)  # 변경된 메서드 사용
+# print("유사도가 높은 텍스트 개수: ", len(docs))
+# print("--" * 20)
+# print("유사도가 높은 텍스트 중 첫 번째 텍스트 출력: ", docs[0])
+# print("--" * 20)
+# print("유사도가 높은 텍스트들의 문서 출처: ")
+# for doc in docs:
+#   print(doc.metadata["source"])
+#   pass
+
+# OpenAPI를 사용하여 대화 모델 생성 사전 주문
 from langchain_core.prompts import PromptTemplate
 
 prompt = PromptTemplate.from_template(
@@ -165,9 +99,11 @@ prompt = PromptTemplate.from_template(
 #Answer:"""
 )
 
-llm = ChatOpenAI(model_name="gpt-4", temperature=0, openai_api_key=openai_api_key)
+llm=ChatOpenAI(model_name="gpt-4o", temperature=0)
 
-# 체인 생성
+# 체인을 생성합니다.
+# RunnablePassthrough() : 데이터를 그래도 전달하는 역할. invoke() 메서드를 통해 입력된 데이터를 그대로 반환
+# StrOutputParser() : LLM이나 chatModel에서 나오는 언어 몸델의 출력을 문자열 형식으로 변환
 rag_chain = (
     {"context": retriever, "question": RunnablePassthrough()}
     | prompt
@@ -175,9 +111,16 @@ rag_chain = (
     | StrOutputParser()
 )
 
-# 질문을 처리하고 답변을 스트리밍
-try:
-    answer = rag_chain.invoke(recieved_question)
-    print(answer)
-except Exception as e:
-    print(f"Error occurred while generating answer: {e}")
+from langchain_teddynote.messages import stream_response
+
+recieved_question = sys.argv[1];
+# print("질문: ", recieved_question)
+
+answer = rag_chain.stream(recieved_question)
+stream_response(answer)
+
+# print(answer)
+
+docs = loader.load()
+print(f"문서의 수: {len(docs)}")
+docs
