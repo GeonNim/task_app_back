@@ -1,32 +1,39 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+
+
 name: Node.js CI
+
 
 on:
   push:
     branches: ['main']
 
+
 jobs:
   build:
     runs-on: self-hosted
 
+
     strategy:
       matrix:
         node-version: [18.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
 
     steps:
       - uses: actions/checkout@v4
-      
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-
       - run: npm ci
-
       - run: |
           touch .env
           echo "${{ secrets.PROD_ENV_FILE }}" > .env
           echo "${{ secrets.OPENAI_API_KEY }}" >> .env
+
 
       # Set up Python environment
       - name: Set up Python 3.12.6
@@ -34,30 +41,19 @@ jobs:
         with:
           python-version: '3.12.6'
 
-      # Create and activate Python virtual environment (Linux/MacOS)
+
+      # Create and activate Python virtual environment
       - name: Set up Python virtual environment
         run: |
           python -m venv venv
-          if [ -f venv/bin/activate ]; then source venv/bin/activate; else . venv/bin/activate; fi
+          source venv/bin/activate
 
-      # Install Python dependencies
+
+      # Install Python dependencies (if you have a requirements.txt file)
       - name: Install Python dependencies
         run: |
           source venv/bin/activate
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # PM2 install and restart BackendAPI
-      - name: Install PM2 globally if not exists
-        run: |
-          if ! command -v pm2 &> /dev/null; then
-            npm install pm2@latest -g;
-          fi
 
-      - name: Restart or reload BackendAPI with PM2
-        run: |
-          if pm2 describe BackendAPI &> /dev/null; then
-            pm2 reload BackendAPI;
-          else
-            pm2 start index.js --name BackendAPI;
-          fi
-          pm2 save  # 상태 저장
+      - run: pm2 restart BackendAPI
