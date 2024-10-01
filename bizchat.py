@@ -82,6 +82,12 @@ embedding = OpenAIEmbeddings()
 vectorstore = FAISS.from_documents(documents=texts, embedding=embedding)
 retriever = vectorstore.as_retriever()
 
+# 벡터스토어를 디스크에 저장
+vectorstore.save_local("vectorstore_data")
+
+# 나중에 벡터스토어를 로드
+vectorstore = FAISS.load_local("vectorstore_data", embedding)
+
 # OpenAI를 사용하여 대화 모델 생성
 from langchain_core.prompts import PromptTemplate
 
