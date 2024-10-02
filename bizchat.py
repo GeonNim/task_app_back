@@ -122,5 +122,5 @@ stream_response(answer)
 # print(answer)
 
 docs = loader.load()
-print(f"문서의 수: {len(docs)}")
+# print(f"문서의 수: {len(docs)}")
 docs
